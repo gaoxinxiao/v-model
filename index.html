@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Document</title>
+</head>
+<body>
+	<div id="app">
+		<input type="text" v-wyc='text'>
+		<input type="text" v-wyc='text2'>
+		<span>{{text}}</span>
+		<div>
+			<div>{{text2}}</div>
+		</div>
+	</div>
+
+	<script type="text/javascript">
+		function Dep(){
+			this.subs=[]
+		}
+		Dep.prototype={
+			addSub:function (sub) {
+				this.subs.push(sub)
+			},
+			notify:function (){
+				console.log(this.subs)
+				this.subs.forEach(function (sub){
+					sub.update();
+				})
+			}
+		}
+		function Vue(options){
+			this.data=options.data;
+			var data = this.data
+			observe(data,this)
+			var id = options.el;
+			var dom = nodeToFragment(document.getElementById(id),this)
+			console.log(dom)
+			//编译完成后将dom返回到app中
+			document.getElementById(id).appendChild(dom)//返回到app中
+		}
+		//数据初始化绑定
+		function compile(node,vm){
+			var reg=/\{\{(.*)\}\}/;
+			//节点类型为元素
+			if (node.nodeType===1){
+				var attr = node.attributes;
+				//解析属性
+				for (var i=0;i<attr.length;i++) {
+					if (attr[i].nodeName=='v-wyc') {
+						var name = attr[i].nodeValue;//获取v-model绑定的属性名
+						node.addEventListener('input',function (e) {
+							//给相应的data属性赋值，进而触发该属性的set方法
+							vm[name] = e.target.value
+						});
+						node.value=vm[name];//将data的值赋给该node
+						node.removeAttribute('v-model');
+					}
+				}
+			}
+			//节点类型text
+			if (node.nodeType==3) {
+				if (reg.test(node.nodeValue)) {
+					var name=RegExp.$1;//获取到匹配到的字符串
+					name=name.trim();
+					new Watcher(vm,node,name)
+				}
+			}
+		}
+		function Watcher(vm,node,name){
+			Dep.target=this;
+			this.name=name;
+			this.node=node;
+			this.vm=vm;
+			this.update();
+			Dep.target=null
+
+		}
+		Watcher.prototype.update = function () {
+			this.get();
+			this.node.nodeValue=this.value;
+		}
+		//获取data中的属性值
+		Watcher.prototype.get = function () {
+			this.value=this.vm[this.name];//触发相应属性的get
+		}
+
+		function nodeToFragment(node,vm){
+			var flag = document.createDocumentFragment();
+			var child;
+			while (child=node.firstChild){
+				compile(child,vm)
+				console.log(child.childNodes)
+				if (child.childNodes.length >= 1) {
+					flag.append(nodeToFragment(child,vm))//劫持node的所有子节点
+				} else {
+					flag.append(child)//劫持node的所有子节点
+				}
+			}
+			return flag
+		}
+		function defineReactive(obj,key,val){
+			var dep = new Dep()
+			Object.defineProperty(obj,key,{
+				get:function (){
+					if (Dep.target) dep.addSub(Dep.target);
+					return val;
+				},
+				set:function (newVal){
+					if (newVal===val) return;
+					val=newVal
+					//作为发布者发出通知
+					dep.notify();
+				}
+			})
+		}
+		function observe(obj,vm){
+			Object.keys(obj).forEach(function (key){
+				defineReactive(vm,key,obj[key])
+			})
+		}
+		var vm = new Vue({
+			el:'app',
+			data:{
+				text:'hello world',
+				text2:'hello world'
+			}
+		})
+	</script>
+</body>
+</html>
